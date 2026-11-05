@@ -1,18 +1,29 @@
 {
-  "name": "poketwo-winter2024-event-completer",
+  "name": "poketwo-halloween2026-event-completer",
   "version": "1.0.0",
-  "description": "",
+  "description": "Poketwo Halloween 2026 event completer for non-catch bingo quests",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "check": "node --check index.js && node -e \"require('./index.js')\""
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/catchtwo-services/halloween2026-event-completer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/catchtwo-services/halloween2026-event-completer/issues"
+  },
+  "homepage": "https://github.com/catchtwo-services/halloween2026-event-completer#readme",
   "author": "kyan0045",
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=18.13.0"
+  },
   "dependencies": {
     "chalk": "^4.1.2",
     "date-and-time": "^3.6.0",
-    "discord.js-selfbot-v13": "^3.4.2",
-    "fs": "^0.0.1-security",
+    "discord-self-lite": "^0.2.0",
     "pokehint": "^1.4.7"
   }
 }
