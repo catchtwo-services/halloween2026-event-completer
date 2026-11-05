@@ -23,6 +23,18 @@ function delay(ms) {
 }
 
 /**
+ * Keep an abandoned wait promise from becoming an unhandled rejection.
+ * The original promise still rejects for callers that await it.
+ *
+ * @param {Promise} promise Promise to guard.
+ * @returns {Promise}
+ */
+function guardRejection(promise) {
+  promise.catch(() => {});
+  return promise;
+}
+
+/**
  * Wait for the first event that matches one of the given predicates.
  *
  * @param {object} client discord-self-lite client.
@@ -78,26 +90,26 @@ function waitForAnyEvent(client, subscriptions, timeout, errorMessage) {
  * @param {number} [timeout=TIMEOUTS.message] Timeout in milliseconds.
  * @returns {Promise<object>} Matching message.
  */
-async function waitForMessage(
+function waitForMessage(
   client,
   channel,
   predicate,
   timeout = TIMEOUTS.message
 ) {
-  const { args } = await waitForAnyEvent(
-    client,
-    [
-      {
-        event: "messageCreate",
-        predicate: (msg) =>
-          msg.channelId === channel.id && predicate(msg),
-      },
-    ],
-    timeout,
-    "Timed out waiting for the bot"
+  return guardRejection(
+    waitForAnyEvent(
+      client,
+      [
+        {
+          event: "messageCreate",
+          predicate: (msg) =>
+            msg.channelId === channel.id && predicate(msg),
+        },
+      ],
+      timeout,
+      "Timed out waiting for the bot"
+    ).then(({ args }) => args[0])
   );
-
-  return args[0];
 }
 
 /**
@@ -112,34 +124,36 @@ async function waitForMessage(
  * @param {object|null} [fallback=null] Previous page used to fill missing fields.
  * @returns {Promise<object>} Normalized message data.
  */
-async function waitForMessageUpdate(
+function waitForMessageUpdate(
   client,
   messageId,
   timeout = TIMEOUTS.message,
   fallback = null
 ) {
-  const { args } = await waitForAnyEvent(
-    client,
-    [
-      {
-        event: "dispatch",
-        predicate: (packet) =>
-          packet?.t === "MESSAGE_UPDATE" &&
-          packet.d?.id === messageId,
-      },
-    ],
-    timeout,
-    "Timed out waiting for the message update"
+  return guardRejection(
+    waitForAnyEvent(
+      client,
+      [
+        {
+          event: "dispatch",
+          predicate: (packet) =>
+            packet?.t === "MESSAGE_UPDATE" &&
+            packet.d?.id === messageId,
+        },
+      ],
+      timeout,
+      "Timed out waiting for the message update"
+    ).then(({ args }) => {
+      const updated = camelCaseKeys(args[0].d);
+
+      if (fallback) {
+        if (!updated.components) updated.components = fallback.components;
+        if (!updated.embeds) updated.embeds = fallback.embeds;
+      }
+
+      return updated;
+    })
   );
-
-  const updated = camelCaseKeys(args[0].d);
-
-  if (fallback) {
-    if (!updated.components) updated.components = fallback.components;
-    if (!updated.embeds) updated.embeds = fallback.embeds;
-  }
-
-  return updated;
 }
 
 /**
@@ -337,6 +351,7 @@ async function getMarketChannel(client, guildChannel) {
 
 module.exports = {
   delay,
+  guardRejection,
   waitForAnyEvent,
   waitForMessage,
   waitForMessageUpdate,

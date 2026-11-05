@@ -1,10 +1,18 @@
 const config = require("./config.js");
 const { sendLog } = require("./src/logger");
 const { readTokens, saveFiles } = require("./src/storage");
-const { login, destroyClient } = require("./src/discord");
+const { DELAYS } = require("./src/constants");
+const { login, destroyClient, delay } = require("./src/discord");
 const { prepareAccount } = require("./src/account");
 const { sellTask, buyTask, handleChests } = require("./src/actions");
 const { getTradeChannelId, runTrades } = require("./src/trade");
+
+process.on("unhandledRejection", (reason) => {
+  const detail =
+    reason instanceof Error ? reason.stack : String(reason);
+
+  sendLog(null, `Unhandled rejection: ${detail}`, "error");
+});
 
 /**
  * Check the minimum configuration needed to run.
@@ -67,6 +75,8 @@ async function prepareSessions(clients) {
         "error"
       );
     }
+
+    await delay(DELAYS.account);
   }
 
   for (const session of sessions) {
@@ -90,6 +100,8 @@ async function runMarketPhase(sessions) {
     } catch (err) {
       sendLog(session.username, `Sell failed: ${err.message}`, "error");
     }
+
+    await delay(DELAYS.account);
   }
 
   for (const session of sessions) {
@@ -98,6 +110,8 @@ async function runMarketPhase(sessions) {
     } catch (err) {
       sendLog(session.username, `Buy failed: ${err.message}`, "error");
     }
+
+    await delay(DELAYS.account);
   }
 }
 
@@ -152,6 +166,8 @@ async function runChestPhase(sessions) {
         "error"
       );
     }
+
+    await delay(DELAYS.account);
   }
 }
 
@@ -187,8 +203,11 @@ async function main() {
     if (clients.length === 0) return;
 
     const sessions = await prepareSessions(clients);
+    await delay(DELAYS.account);
     await runMarketPhase(sessions);
+    await delay(DELAYS.account);
     await runTradePhase(sessions);
+    await delay(DELAYS.account);
     await runChestPhase(sessions);
 
     sendLog(null, "Done.", "info");

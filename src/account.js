@@ -68,7 +68,7 @@ async function prepareAccount(client, accountCount) {
   const marketChannel = await getMarketChannel(client, channel);
 
   await startEvent(client, channel);
-  await delay(DELAYS.short);
+  await delay(DELAYS.account);
 
   const card = await fetchBingoCard(client, channel);
   const quests = parseQuests(card.text);
@@ -101,12 +101,21 @@ async function prepareAccount(client, accountCount) {
     "info"
   );
 
-  const pokemon =
-    summary.release > 0 || summary.earn > 0
-      ? await fetchPokemon(client, channel, {
-          maxPages: MAX_LIST_PAGES,
-        })
-      : [];
+  let pokemon = [];
+
+  if (summary.release > 0 || summary.earn > 0) {
+    try {
+      pokemon = await fetchPokemon(client, channel, {
+        maxPages: MAX_LIST_PAGES,
+      });
+    } catch (err) {
+      sendLog(
+        username,
+        `Pokemon list failed: ${err.message}`,
+        "error"
+      );
+    }
+  }
 
   if (pokemon.length > 0) await annotateRarity(pokemon);
 
@@ -122,11 +131,29 @@ async function prepareAccount(client, accountCount) {
   };
 
   if (summary.release > 0) {
-    await releaseTask(session, summary.release);
+    try {
+      await releaseTask(session, summary.release);
+    } catch (err) {
+      sendLog(
+        username,
+        `Release action failed: ${err.message}`,
+        "error"
+      );
+    }
+
+    await delay(DELAYS.account);
   }
 
   if (summary.evolve > 0) {
-    await evolveTask(session, summary.evolve);
+    try {
+      await evolveTask(session, summary.evolve);
+    } catch (err) {
+      sendLog(
+        username,
+        `Evolve action failed: ${err.message}`,
+        "error"
+      );
+    }
   }
 
   return session;

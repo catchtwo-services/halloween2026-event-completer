@@ -14,6 +14,7 @@ const { sendLog } = require("./logger");
 const { messageText, camelCaseKeys } = require("./parsers");
 const {
   delay,
+  guardRejection,
   waitForAnyEvent,
   waitForMessage,
   hasButton,
@@ -61,36 +62,36 @@ async function getTradeChannelId(sessions) {
  * @param {number} [timeout=TIMEOUTS.tradeComplete] Timeout in milliseconds.
  * @returns {Promise<object>}
  */
-async function waitForTradeCompletion(
+function waitForTradeCompletion(
   client,
   channelId,
   timeout = TIMEOUTS.tradeComplete
 ) {
-  const { args } = await waitForAnyEvent(
-    client,
-    [
-      {
-        event: "messageCreate",
-        predicate: (msg) =>
-          msg.channelId === channelId &&
-          msg.author.id === POKETWO_ID &&
-          /completed trade/i.test(messageText(msg)),
-      },
-      {
-        event: "dispatch",
-        predicate: (packet) =>
-          packet?.t === "MESSAGE_UPDATE" &&
-          packet.d?.channel_id === channelId &&
-          /completed trade/i.test(
-            messageText(camelCaseKeys(packet.d))
-          ),
-      },
-    ],
-    timeout,
-    "Timed out waiting for the trade to complete"
+  return guardRejection(
+    waitForAnyEvent(
+      client,
+      [
+        {
+          event: "messageCreate",
+          predicate: (msg) =>
+            msg.channelId === channelId &&
+            msg.author.id === POKETWO_ID &&
+            /completed trade/i.test(messageText(msg)),
+        },
+        {
+          event: "dispatch",
+          predicate: (packet) =>
+            packet?.t === "MESSAGE_UPDATE" &&
+            packet.d?.channel_id === channelId &&
+            /completed trade/i.test(
+              messageText(camelCaseKeys(packet.d))
+            ),
+        },
+      ],
+      timeout,
+      "Timed out waiting for the trade to complete"
+    ).then(({ args }) => args[0])
   );
-
-  return args[0];
 }
 
 /**
@@ -283,7 +284,7 @@ async function runTrades(sessions, channelId) {
         break;
       }
 
-      await delay(DELAYS.short);
+      await delay(DELAYS.account);
     }
   }
 

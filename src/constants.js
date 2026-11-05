@@ -28,6 +28,7 @@ const DELAYS = Object.freeze({
   short: 1000,
   page: 500,
   action: 1500,
+  account: 2500,
   tradeAdd: 5000,
   retry: 3000,
   cancel: 1000,
