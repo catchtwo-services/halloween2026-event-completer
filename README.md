@@ -5,7 +5,7 @@ This is a standalone completer for the Halloween 2026 event, **When the Night Fa
 - releases pokemon for the Release quest
 - evolves pokemon for the Evolve quest
 - lists and buys market pokemon between your accounts for the Spend and Earn quests
-- completes the Trade quest by trading 1 Pokecoin between two accounts in a shared channel
+- completes the Trade quest by starting and immediately cancelling a trade between two accounts in a shared channel
 - optionally fuses and opens chests
 
 It does **not** catch pokemon. Use your own autocatcher for that.
@@ -44,14 +44,14 @@ The script runs once, then exits. Run it again as your autocatcher completes mor
 2. It calculates the remaining amount for Release, Evolve, Spend, Earn and Trade. Catch quests are ignored.
 3. It fetches the account's pokemon list and releases or evolves what it can.
 4. After every account has listed its market item, the other accounts buy them. This completes Spend and Earn in the same run.
-5. If a Trade quest is on the card, it pairs accounts and completes each trade with 1 Pokecoin from each side.
+5. If a Trade quest is on the card, it pairs accounts, starts a trade, and cancels it immediately.
 6. If enabled, it fuses Sunlit and Phantom Chests with Eclipse Fusers, then opens the chests.
 
 If there are not enough release or evolve candidates on the first few pages, the script logs how many it found. It does not buy extra evolve candidates from the market.
 
 The trade channel has to be visible to every account. If `tradeChannelId` is empty, the script uses `channelId`, then a text channel named `commands`, `bots`, `poketwo`, `trades` or `general`.
 
-Each trade adds 1 Pokecoin on each side, so every account needs at least 1 Pokecoin.
+Trades do not need items. The quest counts the trade event even when the trade is cancelled immediately.
 
 ### Files
 

@@ -18,8 +18,7 @@ const TIMEOUTS = Object.freeze({
   event: 10000,
   card: 20000,
   tradeRequest: 15000,
-  tradeConfirm: 15000,
-  tradeComplete: 20000,
+  cancel: 10000,
   marketResult: 10000,
   login: 30000,
 });
@@ -29,7 +28,6 @@ const DELAYS = Object.freeze({
   page: 500,
   action: 1500,
   account: 2500,
-  tradeAdd: 5000,
   retry: 3000,
   cancel: 1000,
 });

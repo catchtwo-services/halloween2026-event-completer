@@ -11,13 +11,10 @@ const {
   TRADE_CHANNEL_NAMES,
 } = require("./constants");
 const { sendLog, formatError } = require("./logger");
-const { messageText, camelCaseKeys } = require("./parsers");
+const { messageText } = require("./parsers");
 const {
   delay,
-  guardRejection,
-  waitForAnyEvent,
   waitForMessage,
-  hasButton,
   pressButtonByLabel,
 } = require("./discord");
 
@@ -55,75 +52,6 @@ async function getTradeChannelId(sessions) {
 }
 
 /**
- * Wait for the completed-trade message or embed edit.
- *
- * @param {object} client discord-self-lite client.
- * @param {string} channelId Trade channel ID.
- * @param {number} [timeout=TIMEOUTS.tradeComplete] Timeout in milliseconds.
- * @returns {Promise<object>}
- */
-function waitForTradeCompletion(
-  client,
-  channelId,
-  timeout = TIMEOUTS.tradeComplete
-) {
-  return guardRejection(
-    waitForAnyEvent(
-      client,
-      [
-        {
-          event: "messageCreate",
-          predicate: (msg) =>
-            msg.channelId === channelId &&
-            msg.author.id === POKETWO_ID &&
-            /completed trade/i.test(messageText(msg)),
-        },
-        {
-          event: "dispatch",
-          predicate: (packet) =>
-            packet?.t === "MESSAGE_UPDATE" &&
-            packet.d?.channel_id === channelId &&
-            /completed trade/i.test(
-              messageText(camelCaseKeys(packet.d))
-            ),
-        },
-      ],
-      timeout,
-      "Timed out waiting for the trade to complete"
-    ).then(({ args }) => args[0])
-  );
-}
-
-/**
- * Run `trade confirm` and click the Confirm button.
- *
- * @param {object} session Account session.
- * @param {string} channelId Trade channel ID.
- * @returns {Promise<void>}
- */
-async function confirmTrade(session, channelId) {
-  const { client, username } = session;
-  const waitForConfirm = waitForMessage(
-    client,
-    { id: channelId },
-    (msg) =>
-      msg.author.id === POKETWO_ID && hasButton(msg, ["confirm"]),
-    TIMEOUTS.tradeConfirm
-  );
-
-  await client.sendMessage(
-    channelId,
-    `<@${POKETWO_ID}> trade confirm`
-  );
-
-  const confirmMsg = await waitForConfirm;
-  pressButtonByLabel(confirmMsg, ["confirm"]);
-  await delay(DELAYS.short);
-
-  sendLog(username, "Confirmed the trade.", "info");
-}
-
-/**
  * Cancel a trade without throwing.
  *
  * @param {object} session Account session.
@@ -142,7 +70,8 @@ async function cancelTrade(session, channelId) {
 }
 
 /**
- * Complete one trade between two accounts using 1 Pokecoin per side.
+ * Start one trade, accept it, then cancel it immediately. Poketwo counts the
+ * trade event even when no items were exchanged.
  *
  * @param {object} initiator Account that starts the trade.
  * @param {object} responder Account that accepts the trade.
@@ -179,26 +108,24 @@ async function runOneTrade(initiator, responder, channelId) {
   pressButtonByLabel(request, ["accept", "✅"]);
   await waitForTrade;
 
+  const waitForCancel = waitForMessage(
+    initiator.client,
+    { id: channelId },
+    (msg) =>
+      msg.author.id === POKETWO_ID &&
+      /(cancel+ed|not in a trade)/i.test(
+        messageText(msg)
+      ),
+    TIMEOUTS.cancel
+  );
+
   await initiator.client.sendMessage(
     channelId,
-    `<@${POKETWO_ID}> trade add pc 1`
+    `<@${POKETWO_ID}> trade cancel`
   );
+
+  await waitForCancel;
   await delay(DELAYS.short);
-  await responder.client.sendMessage(
-    channelId,
-    `<@${POKETWO_ID}> trade add pc 1`
-  );
-  await delay(DELAYS.tradeAdd);
-
-  await confirmTrade(initiator, channelId);
-
-  const completion = waitForTradeCompletion(
-    initiator.client,
-    channelId
-  );
-
-  await confirmTrade(responder, channelId);
-  await completion;
 
   sendLog(
     initiator.username,
@@ -297,8 +224,6 @@ async function runTrades(sessions, channelId) {
 
 module.exports = {
   getTradeChannelId,
-  waitForTradeCompletion,
-  confirmTrade,
   runOneTrade,
   runTrades,
 };

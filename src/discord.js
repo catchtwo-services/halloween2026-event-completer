@@ -193,19 +193,6 @@ function pressButton(msg, customId) {
 }
 
 /**
- * Check whether a message has a button matching one of the labels.
- *
- * @param {object} msg Message-like object.
- * @param {string[]} labels Labels or emoji names to match.
- * @returns {boolean}
- */
-function hasButton(msg, labels) {
-  return getButtons(msg).some((button) =>
-    labels.some((label) => buttonMatches(button, label))
-  );
-}
-
-/**
  * Click the first button matching one of the labels, falling back to the first
  * enabled button.
  *
@@ -356,7 +343,6 @@ module.exports = {
   waitForMessage,
   waitForMessageUpdate,
   pressButton,
-  hasButton,
   pressButtonByLabel,
   destroyClient,
   login,
