@@ -32,4 +32,22 @@ function sendLog(username, message, type = "info") {
   );
 }
 
-module.exports = { sendLog };
+/**
+ * Format an error with the Discord API details when they are available.
+ *
+ * @param {*} err Error or rejection value.
+ * @returns {string}
+ */
+function formatError(err) {
+  if (!(err instanceof Error)) return String(err);
+
+  const parts = [err.message];
+
+  if (err.status) parts.push(`status ${err.status}`);
+  if (err.path) parts.push(err.path);
+  if (err.code) parts.push(`code ${err.code}`);
+
+  return parts.join(" | ");
+}
+
+module.exports = { sendLog, formatError };

@@ -1,5 +1,5 @@
 const config = require("./config.js");
-const { sendLog } = require("./src/logger");
+const { sendLog, formatError } = require("./src/logger");
 const { readTokens, saveFiles } = require("./src/storage");
 const { DELAYS } = require("./src/constants");
 const { login, destroyClient, delay } = require("./src/discord");
@@ -49,7 +49,7 @@ async function loginAll(tokens) {
       clients.push(client);
       sendLog(client.user.username, "Logged in.", "success");
     } catch (err) {
-      sendLog(null, `Login failed: ${err.message}`, "error");
+      sendLog(null, `Login failed: ${formatError(err)}`, "error");
     }
   }
 
@@ -69,11 +69,21 @@ async function prepareSessions(clients) {
     try {
       sessions.push(await prepareAccount(client, clients.length));
     } catch (err) {
+      const detail = formatError(err);
+
       sendLog(
         client.user.username,
-        `Setup failed: ${err.message}`,
+        `Setup failed: ${detail}`,
         "error"
       );
+
+      if (detail.includes("status 401")) {
+        sendLog(
+          client.user.username,
+          "Discord rejected the token for REST requests. Generate a fresh token for this account.",
+          "error"
+        );
+      }
     }
 
     await delay(DELAYS.account);
@@ -98,7 +108,7 @@ async function runMarketPhase(sessions) {
     try {
       await sellTask(session, session.summary.earn);
     } catch (err) {
-      sendLog(session.username, `Sell failed: ${err.message}`, "error");
+      sendLog(session.username, `Sell failed: ${formatError(err)}`, "error");
     }
 
     await delay(DELAYS.account);
@@ -108,7 +118,7 @@ async function runMarketPhase(sessions) {
     try {
       await buyTask(session, session.summary.spend);
     } catch (err) {
-      sendLog(session.username, `Buy failed: ${err.message}`, "error");
+      sendLog(session.username, `Buy failed: ${formatError(err)}`, "error");
     }
 
     await delay(DELAYS.account);
@@ -145,7 +155,7 @@ async function runTradePhase(sessions) {
   try {
     await runTrades(sessions, channelId);
   } catch (err) {
-    sendLog(null, `Trade run failed: ${err.message}`, "error");
+    sendLog(null, `Trade run failed: ${formatError(err)}`, "error");
   }
 }
 
@@ -162,7 +172,7 @@ async function runChestPhase(sessions) {
     } catch (err) {
       sendLog(
         session.username,
-        `Chest handling failed: ${err.message}`,
+        `Chest handling failed: ${formatError(err)}`,
         "error"
       );
     }
@@ -181,7 +191,7 @@ function shutdown(clients) {
   try {
     saveFiles();
   } catch (err) {
-    sendLog(null, `Could not save files: ${err.message}`, "error");
+    sendLog(null, `Could not save files: ${formatError(err)}`, "error");
   }
 
   for (const client of clients) destroyClient(client);
@@ -218,7 +228,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((err) => {
-    sendLog(null, `Fatal: ${err.stack ?? err.message}`, "error");
+    sendLog(null, `Fatal: ${err.stack ?? formatError(err)}`, "error");
     process.exitCode = 1;
   });
 }

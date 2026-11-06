@@ -8,7 +8,7 @@ const {
   MAX_LIST_PAGES,
   DELAYS,
 } = require("./constants");
-const { sendLog } = require("./logger");
+const { sendLog, formatError } = require("./logger");
 const {
   getGuildChannel,
   getMarketChannel,
@@ -58,19 +58,52 @@ async function prepareAccount(client, accountCount) {
   if (!tasks[username]) tasks[username] = {};
   if (!market[username]) market[username] = [];
 
-  const guild =
-    client.guilds.get(config.guildId) ??
-    (await client.resolveGuild(config.guildId));
+  let guild;
+
+  try {
+    guild =
+      client.guilds.get(config.guildId) ??
+      (await client.resolveGuild(config.guildId));
+  } catch (err) {
+    throw new Error(`Guild lookup failed: ${formatError(err)}`);
+  }
 
   if (!guild) throw new Error(`Guild ${config.guildId} not found`);
 
-  const channel = await getGuildChannel(client, guild);
-  const marketChannel = await getMarketChannel(client, channel);
+  let channel;
+
+  try {
+    channel = await getGuildChannel(client, guild);
+  } catch (err) {
+    throw new Error(`Channel lookup failed: ${formatError(err)}`);
+  }
+
+  let marketChannel;
+
+  try {
+    marketChannel = await getMarketChannel(client, channel);
+  } catch (err) {
+    sendLog(
+      username,
+      `Market channel setup failed: ${formatError(
+        err
+      )}. Falling back to the guild channel.`,
+      "error"
+    );
+    marketChannel = channel;
+  }
 
   await startEvent(client, channel);
   await delay(DELAYS.account);
 
-  const card = await fetchBingoCard(client, channel);
+  let card;
+
+  try {
+    card = await fetchBingoCard(client, channel);
+  } catch (err) {
+    throw new Error(`Bingo card fetch failed: ${formatError(err)}`);
+  }
+
   const quests = parseQuests(card.text);
   const summary = summarizeTasks(quests);
 
@@ -111,7 +144,7 @@ async function prepareAccount(client, accountCount) {
     } catch (err) {
       sendLog(
         username,
-        `Pokemon list failed: ${err.message}`,
+        `Pokemon list failed: ${formatError(err)}`,
         "error"
       );
     }
@@ -136,7 +169,7 @@ async function prepareAccount(client, accountCount) {
     } catch (err) {
       sendLog(
         username,
-        `Release action failed: ${err.message}`,
+        `Release action failed: ${formatError(err)}`,
         "error"
       );
     }
@@ -150,7 +183,7 @@ async function prepareAccount(client, accountCount) {
     } catch (err) {
       sendLog(
         username,
-        `Evolve action failed: ${err.message}`,
+        `Evolve action failed: ${formatError(err)}`,
         "error"
       );
     }

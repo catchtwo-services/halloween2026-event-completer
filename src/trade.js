@@ -10,7 +10,7 @@ const {
   DELAYS,
   TRADE_CHANNEL_NAMES,
 } = require("./constants");
-const { sendLog } = require("./logger");
+const { sendLog, formatError } = require("./logger");
 const { messageText, camelCaseKeys } = require("./parsers");
 const {
   delay,
@@ -274,7 +274,7 @@ async function runTrades(sessions, channelId) {
       } catch (err) {
         sendLog(
           session.username,
-          `Trade with ${partner.username} failed: ${err.message}`,
+          `Trade with ${partner.username} failed: ${formatError(err)}`,
           "error"
         );
 
