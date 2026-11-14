@@ -68,7 +68,9 @@ function removeMarketListing(owner, id) {
   const listings = market[owner];
   if (!Array.isArray(listings)) return;
 
-  const index = listings.indexOf(id);
+  const index = listings.findIndex(
+    (listing) => String(listing) === String(id)
+  );
   if (index !== -1) listings.splice(index, 1);
 }
 

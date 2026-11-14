@@ -14,6 +14,45 @@ process.on("unhandledRejection", (reason) => {
   sendLog(null, `Unhandled rejection: ${detail}`, "error");
 });
 
+let shuttingDown = false;
+
+/**
+ * Stop after the current action.
+ *
+ * @param {string} signal Signal name.
+ * @returns {void}
+ */
+function requestShutdown(signal) {
+  if (shuttingDown) {
+    sendLog(null, "Forcing exit.", "error");
+    process.exit(0);
+  }
+
+  shuttingDown = true;
+  sendLog(
+    null,
+    `Received ${signal}. Stopping after the current action.`,
+    "info"
+  );
+}
+
+process.on("SIGINT", () => requestShutdown("SIGINT"));
+process.on("SIGTERM", () => requestShutdown("SIGTERM"));
+
+/**
+ * Wait for the next cycle, but stop early when a shutdown signal arrives.
+ *
+ * @param {number} ms Delay in milliseconds.
+ * @returns {Promise<void>}
+ */
+async function waitForNextCycle(ms) {
+  const end = Date.now() + ms;
+
+  while (!shuttingDown && Date.now() < end) {
+    await delay(Math.min(1000, end - Date.now()));
+  }
+}
+
 /**
  * Check the minimum configuration needed to run.
  *
@@ -114,9 +153,15 @@ async function runMarketPhase(sessions) {
     await delay(DELAYS.account);
   }
 
+  const attemptedListings = new Set();
+
   for (const session of sessions) {
     try {
-      await buyTask(session, session.summary.spend);
+      await buyTask(
+        session,
+        session.summary.spend,
+        attemptedListings
+      );
     } catch (err) {
       sendLog(session.username, `Buy failed: ${formatError(err)}`, "error");
     }
@@ -198,6 +243,22 @@ function shutdown(clients) {
 }
 
 /**
+ * Run one full quest cycle.
+ *
+ * @param {Array<object>} clients Ready clients.
+ * @returns {Promise<void>}
+ */
+async function runCycle(clients) {
+  const sessions = await prepareSessions(clients);
+  await delay(DELAYS.account);
+  await runMarketPhase(sessions);
+  await delay(DELAYS.account);
+  await runTradePhase(sessions);
+  await delay(DELAYS.account);
+  await runChestPhase(sessions);
+}
+
+/**
  * Main entry point.
  *
  * @returns {Promise<void>}
@@ -210,17 +271,36 @@ async function main() {
     if (!isConfigured(tokens)) return;
 
     clients.push(...(await loginAll(tokens)));
-    if (clients.length === 0) return;
+    if (clients.length === 0 || shuttingDown) return;
 
-    const sessions = await prepareSessions(clients);
-    await delay(DELAYS.account);
-    await runMarketPhase(sessions);
-    await delay(DELAYS.account);
-    await runTradePhase(sessions);
-    await delay(DELAYS.account);
-    await runChestPhase(sessions);
+    const configuredLoop = Number(config.loopDelayMinutes ?? 0);
+    const loopMinutes =
+      Number.isFinite(configuredLoop) && configuredLoop > 0
+        ? configuredLoop
+        : 0;
 
-    sendLog(null, "Done.", "info");
+    do {
+      try {
+        await runCycle(clients);
+        sendLog(
+          null,
+          loopMinutes > 0 ? "Cycle finished." : "Done.",
+          "info"
+        );
+      } catch (err) {
+        sendLog(null, `Cycle failed: ${formatError(err)}`, "error");
+      }
+
+      if (shuttingDown || loopMinutes <= 0) break;
+
+      sendLog(
+        null,
+        `Next check in ${loopMinutes} minute(s).`,
+        "info"
+      );
+
+      await waitForNextCycle(loopMinutes * 60 * 1000);
+    } while (!shuttingDown);
   } finally {
     shutdown(clients);
   }

@@ -8,6 +8,7 @@ const EVENT_COMMAND = "halloween bingo";
 const MARKET_PRICE = 1000;
 const MAX_LIST_PAGES = 5;
 const MAX_EVOLVE_PAGES = 10;
+const MAX_MARKET_ATTEMPTS = 10;
 
 const TASKS_FILE = "tasks.json";
 const MARKET_FILE = "market.json";
@@ -75,6 +76,7 @@ module.exports = {
   MARKET_PRICE,
   MAX_LIST_PAGES,
   MAX_EVOLVE_PAGES,
+  MAX_MARKET_ATTEMPTS,
   TASKS_FILE,
   MARKET_FILE,
   TOKENS_FILE,

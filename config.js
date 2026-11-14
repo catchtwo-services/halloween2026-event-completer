@@ -29,6 +29,9 @@ const config = {
 
   // Optional. Open every chest after the quest actions finish.
   openChests: false,
+
+  // Minutes between quest checks. Set to 0 to run once and exit.
+  loopDelayMinutes: 5,
 };
 
 module.exports = config;

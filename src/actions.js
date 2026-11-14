@@ -8,6 +8,7 @@ const {
   POKETWO_ID,
   MARKET_PRICE,
   MAX_EVOLVE_PAGES,
+  MAX_MARKET_ATTEMPTS,
   TIMEOUTS,
   DELAYS,
   IV_RANGES,
@@ -238,91 +239,196 @@ async function sellTask(session, amount) {
  *
  * @param {object} session Account session.
  * @param {number} amount Remaining Spend amount.
+ * @param {Set<string>} [attemptedListings] Listings already tried this run.
  * @returns {Promise<void>}
  */
-async function buyTask(session, amount) {
+async function buyTask(
+  session,
+  amount,
+  attemptedListings = new Set()
+) {
   if (amount <= 0) return;
 
   const { client, marketChannel, username } = session;
   const listings = Object.entries(market)
     .filter(([owner]) => owner !== username)
     .flatMap(([owner, ids]) =>
-      Array.isArray(ids) ? ids.map((id) => ({ id, owner })) : []
-    );
+      Array.isArray(ids)
+        ? ids.map((id) => ({ id: String(id), owner }))
+        : []
+    )
+    .filter((listing) => !attemptedListings.has(listing.id))
+    .slice(0, MAX_MARKET_ATTEMPTS);
 
   if (listings.length === 0) {
     sendLog(username, "No listings from other accounts to buy.", "error");
     return;
   }
 
-  const listing = listings[0];
-  const waitForConfirm = waitForMessage(
-    client,
-    marketChannel,
-    (msg) =>
-      msg.author.id === POKETWO_ID &&
-      /are you sure you want to buy/i.test(messageText(msg)),
-    TIMEOUTS.message
-  );
+  for (const listing of listings) {
+    attemptedListings.add(listing.id);
 
-  try {
-    await marketChannel.send(`<@${POKETWO_ID}> m buy ${listing.id}`);
-  } catch (err) {
-    waitForConfirm.catch(() => {});
-    throw err;
-  }
+    const waitForResponse = waitForMessage(
+      client,
+      marketChannel,
+      (msg) => {
+        if (msg.author.id !== POKETWO_ID) return false;
 
-  const confirm = await waitForConfirm;
-  const waitForResult = waitForMessage(
-    client,
-    marketChannel,
-    (msg) =>
-      msg.author.id === POKETWO_ID &&
-      msg.id !== confirm.id &&
-      /(bought|purchased|purchase|not enough|no longer|failed)/i.test(
-        messageText(msg)
-      ),
-    TIMEOUTS.marketResult
-  );
+        const text = messageText(msg);
+        return (
+          /are you sure you want to buy/i.test(text) ||
+          /couldn't find that listing/i.test(text) ||
+          /can't purchase your own listing/i.test(text) ||
+          /don't have enough pok[eé]coins/i.test(text)
+        );
+      },
+      TIMEOUTS.marketResult
+    );
 
-  pressButton(confirm, confirm.components?.[0]?.components?.[0]?.customId);
+    try {
+      await marketChannel.send(`<@${POKETWO_ID}> m buy ${listing.id}`);
+    } catch (err) {
+      waitForResponse.catch(() => {});
+      throw err;
+    }
 
-  try {
-    const result = await waitForResult;
-    const text = messageText(result);
+    let response;
 
-    if (/(no longer|not found|does not exist)/i.test(text)) {
-      removeMarketListing(listing.owner, listing.id);
-      saveFiles();
-
+    try {
+      response = await waitForResponse;
+    } catch (err) {
       sendLog(
         username,
-        `Listing #${listing.id} no longer exists, removed it from market.json.`,
+        `Market buy ${listing.id} timed out.`,
         "error"
       );
       return;
     }
 
-    if (!/(bought|purchased|purchase)/i.test(text)) {
-      sendLog(username, `Market purchase failed: ${text}`, "error");
+    const responseText = messageText(response);
+
+    if (/couldn't find that listing/i.test(responseText)) {
+      removeMarketListing(listing.owner, listing.id);
+      saveFiles();
+      sendLog(
+        username,
+        `Listing #${listing.id} no longer exists, removed it.`,
+        "error"
+      );
+      continue;
+    }
+
+    if (/can't purchase your own listing/i.test(responseText)) {
+      attemptedListings.delete(listing.id);
+      sendLog(
+        username,
+        `Skipped own listing #${listing.id}.`,
+        "error"
+      );
+      continue;
+    }
+
+    if (/don't have enough pok[eé]coins/i.test(responseText)) {
+      attemptedListings.delete(listing.id);
+      sendLog(
+        username,
+        `Not enough Pokécoins to buy listing #${listing.id}.`,
+        "error"
+      );
       return;
     }
-  } catch (err) {
+
+    const waitForResult = waitForMessage(
+      client,
+      marketChannel,
+      (msg) => {
+        if (msg.author.id !== POKETWO_ID) return false;
+        if (msg.id === response.id) return false;
+
+        const text = messageText(msg);
+        return (
+          /purchased a .* from the market/i.test(text) ||
+          /that listing no longer exists/i.test(text) ||
+          /don't have enough pok[eé]coins/i.test(text) ||
+          /time's up|aborted/i.test(text)
+        );
+      },
+      TIMEOUTS.marketResult
+    );
+
+    pressButton(
+      response,
+      response.components?.[0]?.components?.[0]?.customId
+    );
+
+    let result;
+
+    try {
+      result = await waitForResult;
+    } catch (err) {
+      sendLog(
+        username,
+        `Purchase result for #${listing.id} was not confirmed, assuming success.`,
+        "error"
+      );
+      removeMarketListing(listing.owner, listing.id);
+      saveFiles();
+      return;
+    }
+
+    const resultText = messageText(result);
+
+    if (/that listing no longer exists/i.test(resultText)) {
+      removeMarketListing(listing.owner, listing.id);
+      saveFiles();
+      sendLog(
+        username,
+        `Listing #${listing.id} no longer exists, removed it.`,
+        "error"
+      );
+      continue;
+    }
+
+    if (/don't have enough pok[eé]coins/i.test(resultText)) {
+      sendLog(
+        username,
+        `Not enough Pokécoins to buy listing #${listing.id}.`,
+        "error"
+      );
+      return;
+    }
+
+    if (/time's up|aborted/i.test(resultText)) {
+      attemptedListings.delete(listing.id);
+      sendLog(
+        username,
+        `Purchase of #${listing.id} was aborted.`,
+        "error"
+      );
+      continue;
+    }
+
+    if (!/purchased a .* from the market/i.test(resultText)) {
+      attemptedListings.delete(listing.id);
+      sendLog(
+        username,
+        `Market purchase failed: ${resultText}`,
+        "error"
+      );
+      continue;
+    }
+
+    removeMarketListing(listing.owner, listing.id);
+    saveFiles();
     sendLog(
       username,
-      "Market purchase result was not confirmed, assuming the purchase went through.",
-      "error"
+      `Bought listing #${listing.id} from ${listing.owner}.`,
+      "success"
     );
+    return;
   }
 
-  removeMarketListing(listing.owner, listing.id);
-  saveFiles();
-
-  sendLog(
-    username,
-    `Bought listing #${listing.id} from ${listing.owner}.`,
-    "success"
-  );
+  sendLog(username, "No usable market listings left to buy.", "error");
 }
 
 /**

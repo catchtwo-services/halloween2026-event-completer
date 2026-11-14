@@ -26,7 +26,7 @@ It does **not** catch pokemon. Use your own autocatcher for that.
    npm install
    ```
 
-2. Open [config.js](config.js) and set `guildId`. Optionally set `channelId` to reuse an existing channel, set `tradeChannelId` to a shared channel for trades, set `marketInDms` to false to use the guild channel for market commands, and enable `fuseChests` or `openChests`.
+2. Open [config.js](config.js) and set `guildId`. Optionally set `channelId` to reuse an existing channel, set `tradeChannelId` to a shared channel for trades, set `marketInDms` to false to use the guild channel for market commands, enable `fuseChests` or `openChests`, and set `loopDelayMinutes` to the delay between checks.
 
 3. Put one token per line in [tokens.txt](tokens.txt). If the file is missing, copy [tokens.example.txt](tokens.example.txt) to `tokens.txt` first. Do not commit this file.
 
@@ -36,7 +36,7 @@ It does **not** catch pokemon. Use your own autocatcher for that.
    node index.js
    ```
 
-The script runs once, then exits. Run it again as your autocatcher completes more catch quests.
+The script checks again every `loopDelayMinutes` minutes (default 5). Set it to `0` to run once and exit. Press Ctrl+C to stop after the current action.
 
 ### How it works
 
